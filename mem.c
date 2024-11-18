@@ -81,19 +81,79 @@ void show_heap() {
   }
 }
 
+void* my_malloc(size_t size) {
+  uint64_t* current = HEAP_START;
+  while(current < (HEAP_START + (HEAP_SIZE / VAL_SIZE))){
+    uint64_t cur_header = *current;
+    uint64_t cur_size = (cur_header / 2) * 2;
 
-int main() {
-  init_heap();
-  show_heap();
-  int* hi = mymalloc(10);
-  show_heap();
-  int* hi2 = mymalloc(100);
-  show_heap();
-  myfree(hi);
-  show_heap();
-  int* hi3 = mymalloc(10);
-  show_heap();
+    // want to know (a) size (b) is it free
+    if((cur_header % 2 == 0) && (size <= cur_size)){
+      // GOAL: split up the block into the malloc'd part and the free part
+      // Round up size to next multiple of 8
+      size_t rounded = ((size + 7) / 8) * 8;
+      *current = rounded + 1; // rounds up and sets the "busy" bit
+
+      // what if remaining is close to 0/8/16, etc
+      if(cur_size - 16 >= (rounded + VAL_SIZE)){
+        size_t remaining = cur_size - (rounded + VAL_SIZE);
+        uint64_t* remaining_ptr = current + (rounded / VAL_SIZE) + 1;
+        *remaining_ptr = remaining; // set remaining as free block
+      }
+
+      return current + 1; // return the start of the malloc'd block
+
+    } else {
+      uint64_t* next = current + (cur_size / VAL_SIZE) + 1;
+      current = next;
+    }
+  }
+  return NULL;
 }
 
 
+void print_heap(){
+    uint64_t* current = HEAP_START;
+    while(current < (HEAP_START + (HEAP_SIZE / VAL_SIZE))){
+        uint64_t cur_header = *current;
+        uint64_t cur_size = (cur_header / 2) * 2;
+        printf("%p\t%llu\t%llu\n", current, cur_header % 2, cur_size);
+        uint64_t* next = current + (cur_size / VAL_SIZE) + 1;
+        current = next;
+    }
 
+    printf("\n\n");
+}
+
+void my_free(void* p){
+    uint64_t* current = p;
+    uint64_t* header = p - 1;
+    if(*header % 2 == 1) { // else case: valgrind reporting double free!
+        *header = *header - 1;
+    }
+}
+
+
+int main() {
+  init_heap();
+  // show_heap();
+  // int* hi = mymalloc(10);
+  // show_heap();
+  // int* hi2 = mymalloc(100);
+  // show_heap();
+  // myfree(hi);
+  // show_heap();
+  // int* hi3 = mymalloc(10);
+  // show_heap();
+
+
+  int* a = my_malloc(40);
+  int* b = my_malloc(10);
+  int* c = my_malloc(20);
+  print_heap();
+  my_free(b);
+  print_heap();
+  int* d = my_malloc(8);
+  print_heap();
+  int* e = my_malloc(15);
+}
